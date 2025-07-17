@@ -11,7 +11,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/libp2p/go-libp2p/core/network"
 	dynssz "github.com/pk910/dynamic-ssz"
-	errors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -132,10 +132,13 @@ func (r *ReqResp) writeRequest(stream network.Stream, req any) error {
 		return fmt.Errorf("failed to set write deadline: %w", err)
 	}
 
-	// Marshal to SSZ
-	data, err := sszCodec.MarshalSSZ(req)
-	if err != nil {
-		return fmt.Errorf("failed to marshal SSZ: %w", err)
+	var data []byte
+	if req != nil {
+		// Marshal to SSZ if the request is not nil
+		var err error
+		if data, err = sszCodec.MarshalSSZ(req); err != nil {
+			return fmt.Errorf("failed to marshal SSZ: %w", err)
+		}
 	}
 
 	// Validate size
@@ -152,9 +155,12 @@ func (r *ReqResp) writeRequest(stream network.Stream, req any) error {
 		return fmt.Errorf("failed to write uncompressed length to buffer: %w", err)
 	}
 
-	// Compress with snappy buffered writer
-	if _, err := writeSnappyBuffer(&buf, data); err != nil {
-		return fmt.Errorf("failed to compress data: %w", err)
+	// Only write if there's data to send.
+	if len(data) > 0 {
+		// Compress with snappy buffered writer
+		if _, err := writeSnappyBuffer(&buf, data); err != nil {
+			return fmt.Errorf("failed to compress data: %w", err)
+		}
 	}
 
 	// Write buffer to the stream
@@ -205,6 +211,27 @@ func (r *ReqResp) readRequest(stream network.Stream, req any) error {
 	// Unmarshal from SSZ
 	if err := sszCodec.UnmarshalSSZ(req, data); err != nil {
 		return fmt.Errorf("failed to unmarshal SSZ: %w", err)
+	}
+
+	return nil
+}
+
+// readEmptyRequest reads an empty request (like metadata requests) that should only have a length prefix of 0
+func (r *ReqResp) readEmptyRequest(stream network.Stream) error {
+	// Set read deadline
+	if err := stream.SetReadDeadline(time.Now().Add(r.cfg.ReadTimeout)); err != nil {
+		return fmt.Errorf("failed to set read deadline: %w", err)
+	}
+
+	// Read uncompressed length prefix
+	uncompressedLength, err := readVarint(stream)
+	if err != nil {
+		return fmt.Errorf("failed to read uncompressed length: %w", err)
+	}
+
+	// For empty requests, the length should be 0
+	if uncompressedLength != 0 {
+		return fmt.Errorf("expected empty request (length 0), got length %d", uncompressedLength)
 	}
 
 	return nil

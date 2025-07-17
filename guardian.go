@@ -16,7 +16,7 @@ import (
 	gcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
-	libp2p "github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p"
 	mplex "github.com/libp2p/go-libp2p-mplex"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -246,6 +246,15 @@ func (g *DasGuardian) init(ctx context.Context) error {
 		ForkDigest: func(slot uint64) []byte {
 			digest, _ := g.apiCli.GetForkDigest(slot)
 			return digest
+		},
+		MetadataV3: func() *MetaDataV3 {
+			return g.fuluMetadata
+		},
+		StatusV1: func() *StatusV1 {
+			return g.electraStatus
+		},
+		StatusV2: func() *StatusV2 {
+			return g.fuluStatus
 		},
 	}
 	reqResp, err := NewReqResp(g.host, reqRespCfg)
@@ -794,7 +803,7 @@ func (g *DasGuardian) visualizeBeaconMetadataV2(metadata *MetaDataV2) map[string
 }
 
 func (g *DasGuardian) requestBeaconMetadataV2(ctx context.Context, pid peer.ID) *MetaDataV2 {
-	metadata, err := g.rpcServ.MetaDataV2(ctx, pid, g.electraMetadata)
+	metadata, err := g.rpcServ.MetaDataV2(ctx, pid)
 	if err != nil {
 		g.cfg.Logger.Warnf("error requesting beacon-metadata-v2 - %s", err.Error())
 	} else {
@@ -840,7 +849,7 @@ func (g *DasGuardian) requestBeaconMetadataV3(ctx context.Context, pid peer.ID) 
 		}).Debug("Peer protocol support check for MetaDataV3")
 	}
 
-	metadata, err := g.rpcServ.MetaDataV3(ctx, pid, g.fuluMetadata)
+	metadata, err := g.rpcServ.MetaDataV3(ctx, pid)
 	if err != nil {
 		g.cfg.Logger.WithFields(log.Fields{
 			"peer_id": pid.String(),
@@ -887,7 +896,7 @@ func (g *DasGuardian) composeLocalBeaconStatus() (*StatusV1, *StatusV2, error) {
 		FinalizedEpoch:        finalizedEpoch,
 		HeadRoot:              headRoot,
 		HeadSlot:              headSlot,
-		EarliestAvailableSlot: headSlot,
+		EarliestAvailableSlot: ^uint64(0),
 	}
 
 	return statusV1, statusV2, nil
@@ -897,12 +906,12 @@ func (g *DasGuardian) composeLocalBeaconMetadata() (*MetaDataV2, *MetaDataV3) {
 	metadataV2 := &MetaDataV2{
 		SeqNumber: 0,
 		Attnets:   [8]byte{},
-		Syncnets:  [1]byte{},
+		Syncnets:  [1]byte{0x0f},
 	}
 	metadataV3 := &MetaDataV3{
 		SeqNumber:         0,
 		Attnets:           [8]byte{},
-		Syncnets:          [1]byte{},
+		Syncnets:          [1]byte{0x0f},
 		CustodyGroupCount: uint64(0),
 	}
 	return metadataV2, metadataV3

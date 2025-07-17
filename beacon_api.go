@@ -284,6 +284,15 @@ func (b *BeaconAPIImpl) GetForkDigest(slot uint64) ([]byte, error) {
 		if !ok {
 			// BLOB_SCHEDULE is not present - this happens when no BPO (Blob Parameter Override) is scheduled.
 			b.cfg.Logger.Warn("BLOB_SCHEDULE not found, if one is expected, this will cause network incompatibility")
+
+			// Fabricate what we'd expect fusaka-devnet-2 to be running.
+			blobSchedule = []any{
+				map[string]any{"EPOCH": uint64(512), "MAX_BLOBS_PER_BLOCK": uint64(12)},
+				map[string]any{"EPOCH": uint64(768), "MAX_BLOBS_PER_BLOCK": uint64(15)},
+				map[string]any{"EPOCH": uint64(1024), "MAX_BLOBS_PER_BLOCK": uint64(18)},
+				map[string]any{"EPOCH": uint64(1280), "MAX_BLOBS_PER_BLOCK": uint64(9)},
+				map[string]any{"EPOCH": uint64(1584), "MAX_BLOBS_PER_BLOCK": uint64(20)},
+			}
 		}
 
 		type blobParam struct {
